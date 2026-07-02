@@ -1,11 +1,12 @@
-﻿namespace WarehouseManager.Services;
+﻿using WarehouseManager.Models;
+using WarehouseManager.Models.Entities;
+
+namespace WarehouseManager.Services;
 
 public interface IItemService
 {
     Task<Item?> GetItemAsync(string name);
 }
-
-public record Item(string ItemName, string Description);
 
 public class ItemsService(ILogger<ItemsService> logger) : IItemService
 {
@@ -20,6 +21,22 @@ public class ItemsService(ILogger<ItemsService> logger) : IItemService
             return null;
         }
 
-        return new Item(name, "Some desc...");
+        return new Item(name, "Some desc...", ItemState.InTransit, 125, 1);
+    }
+
+
+    public async Task GetItemsAsync(int page, int pageSize)
+    {
+        
+    }
+    
+    public async Task AddItemsAsync(IReadOnlyCollection<Item> items)
+    {
+    
+    }
+
+    public async Task MoveItemAsync(int itemId)
+    {
+        
     }
 }
