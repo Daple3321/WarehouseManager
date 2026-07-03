@@ -1,0 +1,38 @@
+services:
+  warehouse-db:
+    image: postgres:16-alpine
+    container_name: warehouse_postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: warehouse_user
+      POSTGRES_PASSWORD: SomeBigPassword123
+      POSTGRES_DB: warehouse_management_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U warehouse_user -d warehouse_management_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  warehouse-api:
+    image: warehouse-manager:latest
+    container_name: warehouse_manager_api
+    build:
+      context: ..
+      dockerfile: WarehouseManager/Dockerfile
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=warehouse-db;Port=5432;Database=warehouse_management_db;Username=warehouse_user;Password=SomeBigPassword123
+    depends_on:
+      warehouse-db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

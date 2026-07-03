@@ -1,6 +1,9 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 using WarehouseManager.Conventions;
+using WarehouseManager.Data;
 using WarehouseManager.Middleware;
 using WarehouseManager.Services;
 
@@ -15,12 +18,15 @@ builder.Services.AddApiVersioning(options =>
     options.ReportApiVersions = true;
 }).AddMvc();
 
-builder.Services.AddScoped<IItemService, ItemsService>();
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-// builder.Services.AddExceptionHandler(options =>
-// {
-//     
-// });
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(connectionString, npgsqlOptions => 
+        npgsqlOptions.EnableRetryOnFailure()));
+
+builder.Services.AddScoped<IItemService, ItemsService>();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 builder.Services.AddControllers(options =>
 {
@@ -33,10 +39,14 @@ var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
+    using var scope = app.Services.CreateScope();
+    await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+
     app.MapOpenApi();
+    app.MapScalarApiReference(); 
 }
 
-app.UseExceptionHandler("/error");
+app.UseExceptionHandler();
 app.UseMiddleware<LoggingMiddleware>();
 
 app.UseHttpsRedirection();

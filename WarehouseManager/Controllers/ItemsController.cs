@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using WarehouseManager.Models.DTOs;
@@ -11,7 +12,12 @@ namespace WarehouseManager.Controllers;
 [Route("[controller]")]
 public class ItemsController(IItemService itemService) : ControllerBase
 {
+    private readonly JsonSerializerOptions _opts = new(){ WriteIndented = true };
+    
     [HttpGet("{name}")]
+    [EndpointSummary("Retrieves an item by its name")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<Item>> Get(string name)
     {
         var item = await itemService.GetItemAsync(name);
@@ -25,7 +31,7 @@ public class ItemsController(IItemService itemService) : ControllerBase
     }
     
     [HttpGet]
-    public async Task<ActionResult<List<Item>>> GetItemsPaginated()
+    public async Task<ActionResult<IEnumerable<Item>>> GetItemsPaginated()
     {
         int page = 1;
         int pageSize = 20;
@@ -49,9 +55,11 @@ public class ItemsController(IItemService itemService) : ControllerBase
             
             pageSize = result;
         }
+
+        var items = await itemService.GetItemsAsync(page, pageSize);
+        string itemsJson = JsonSerializer.Serialize(items, _opts);
         
-        
-        return Ok($"Page = {page}, PageSize = {pageSize}");
+        return Ok(itemsJson);
     }
     
     /// <summary>
@@ -75,10 +83,13 @@ public class ItemsController(IItemService itemService) : ControllerBase
     /// </summary>
     /// <returns></returns>
     [HttpPut("move")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> MoveItem([FromBody] MoveDto moveDto)
     {
-        
-        return Ok();
+        var item = await itemService.MoveItemAsync(moveDto.ItemId, moveDto.ZoneId);
+        return Ok(item);
     }
     
     [HttpPost("{itemId:int}/defect")]
@@ -86,8 +97,7 @@ public class ItemsController(IItemService itemService) : ControllerBase
     {
         if (defectDto.DefectImage == null || defectDto.DefectImage.Length == 0)
             return BadRequest("File is empty.");
-
-        // Example: Reading file data into a byte array for database storage
+        
         using var memoryStream = new MemoryStream();
         await defectDto.DefectImage.CopyToAsync(memoryStream);
         byte[] fileBytes = memoryStream.ToArray();
