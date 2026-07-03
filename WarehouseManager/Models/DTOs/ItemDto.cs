@@ -1,3 +1,3 @@
 ﻿namespace WarehouseManager.Models.DTOs;
 
-public record ItemDto(string ItemName, string Description, int ZoneId);
+public record struct ItemDto(string ItemName, string Description, int ZoneId);

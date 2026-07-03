@@ -12,26 +12,31 @@ namespace WarehouseManager.Controllers;
 [Route("[controller]")]
 public class ItemsController(IItemService itemService) : ControllerBase
 {
-    private readonly JsonSerializerOptions _opts = new(){ WriteIndented = true };
+    private readonly JsonSerializerOptions _opts = new(){ WriteIndented = true/*, PropertyNamingPolicy = JsonNamingPolicy.CamelCase*/};
     
-    [HttpGet("{name}")]
-    [EndpointSummary("Retrieves an item by its name")]
+    [HttpGet("{itemId:int}")]
+    [EndpointSummary("Retrieves an item by its id")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<Item>> Get(string name)
+    public async Task<ActionResult<Item>> GetItemById(int itemId)
     {
-        var item = await itemService.GetItemAsync(name);
+        if (itemId < 0)
+        {
+            return BadRequest("Id can't be negative");
+        }
+        
+        var item = await itemService.GetItemAsync(itemId);
         
         if (item == null)
         {
-            return NotFound($"Item {name} was not found.");
+            return NotFound($"Item {itemId} was not found.");
         }
         
         return Ok(item);
     }
     
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Item>>> GetItemsPaginated()
+    public async Task<ActionResult<List<Item>>> GetItemsPaginated()
     {
         int page = 1;
         int pageSize = 20;
@@ -56,10 +61,10 @@ public class ItemsController(IItemService itemService) : ControllerBase
             pageSize = result;
         }
 
-        var items = await itemService.GetItemsAsync(page, pageSize);
-        string itemsJson = JsonSerializer.Serialize(items, _opts);
+        var items = await itemService.GetItemsPaginatedAsync(page, pageSize);
+        //string itemsJson = JsonSerializer.Serialize(items, _opts);
         
-        return Ok(itemsJson);
+        return Ok(items);
     }
     
     /// <summary>
@@ -67,15 +72,31 @@ public class ItemsController(IItemService itemService) : ControllerBase
     /// </summary>
     /// <param name="items"></param>
     /// <returns></returns>
-    [HttpPost]
+    [HttpPost("receive")]
     public async Task<IActionResult> ReceiveItems([FromBody] List<ItemDto> items)
     {
         if (items == null || !items.Any())
         {
             return BadRequest("Invalid request body. No items to add.");
         }
+
+        var created = await itemService.AddItemsAsync(items);
         
-        return Created();
+        return Created("", created);
+    }
+    
+    [HttpPost]
+    public async Task<ActionResult<Item>> AddItem([FromBody] ItemDto item)
+    {
+        if (string.IsNullOrEmpty(item.ItemName))
+        {
+            return BadRequest("Invalid request body. No item name specified.");
+        }
+
+        var createdItem = await itemService.AddItemAsync(item);
+
+        //return CreatedAtRoute(nameof(GetItemById), new { Version = "1", id = createdItem.Id }, createdItem);
+        return Created("", createdItem);
     }
     
     /// <summary>
@@ -86,7 +107,7 @@ public class ItemsController(IItemService itemService) : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> MoveItem([FromBody] MoveDto moveDto)
+    public async Task<ActionResult<Item>> MoveItem([FromBody] MoveDto moveDto)
     {
         var item = await itemService.MoveItemAsync(moveDto.ItemId, moveDto.ZoneId);
         return Ok(item);
