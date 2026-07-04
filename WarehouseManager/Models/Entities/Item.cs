@@ -9,7 +9,11 @@ public enum ItemState
     ReadyForSale = 4,
 }
 
-public record Item(string ItemName, string Description, ItemState State , int Id, int ZoneId)
-{
-
-}
+public record Item(
+    string ItemName, 
+    string Description, 
+    ItemState State , 
+    int Id, 
+    int ZoneId, 
+    string? ImageName = null
+    );
