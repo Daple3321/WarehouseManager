@@ -7,6 +7,10 @@ using WarehouseManager.Services;
 
 namespace WarehouseManager.Controllers;
 
+// TODO: Things to clear-up:
+// 1) Why is there two places for error handling?? IN service (throws) and in this controller. Which one actually returns?
+// 2) Error handling is bad. In image uploads and other places the stack traces leak.
+// 3)
 [ApiController]
 [ApiVersion("1.0")]
 [Route("[controller]")]
@@ -20,19 +24,28 @@ public class ItemsController(IItemService itemService) : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<Item>> GetItemById(int itemId)
     {
-        if (itemId < 0)
-        {
-            return BadRequest("Id can't be negative");
-        }
+        if (itemId < 0) return BadRequest("Id can't be negative");
         
         var item = await itemService.GetItemAsync(itemId);
         
-        if (item == null)
-        {
-            return NotFound($"Item {itemId} was not found.");
-        }
+        if (item == null) return NotFound($"Item {itemId} was not found.");
         
         return Ok(item);
+    }
+    
+    [HttpGet("{itemId:int}/image")]
+    [EndpointSummary("Retrieves an item image by item id")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<Item>> GetImageForItem(int itemId)
+    {
+        if (itemId < 0) return BadRequest("Id can't be negative");
+        
+        var image = await itemService.GetImageForItem(itemId);
+        if (image == null) return NotFound($"Image for item {itemId} was not found.");
+        
+        // BUG: Content type here is not always jpg
+        return File(image, "image/jpg");
     }
     
     [HttpGet]
@@ -68,7 +81,7 @@ public class ItemsController(IItemService itemService) : ControllerBase
     }
     
     /// <summary>
-    /// Accept a batch of items and instantiate them with 'Inspection' state.
+    /// Accept a batch of items and instantiate them with 'Received' state.
     /// </summary>
     /// <param name="items"></param>
     /// <returns></returns>
@@ -86,19 +99,31 @@ public class ItemsController(IItemService itemService) : ControllerBase
     }
     
     [HttpPost]
-    public async Task<ActionResult<Item>> AddItem([FromBody] ItemDto item)
+    public async Task<ActionResult<Item>> AddItem([FromForm] ItemDto item)
     {
         if (string.IsNullOrEmpty(item.ItemName))
         {
             return BadRequest("Invalid request body. No item name specified.");
         }
-
+        
         var createdItem = await itemService.AddItemAsync(item);
+        if (createdItem == null)
+            return BadRequest();
 
         //return CreatedAtRoute(nameof(GetItemById), new { Version = "1", id = createdItem.Id }, createdItem);
         return Created("", createdItem);
     }
-    
+
+    [HttpDelete("{itemId:int}")]
+    public async Task<IActionResult> DeleteItem(int itemId)
+    {
+        if (itemId < 0) return BadRequest("ItemId can't be negative");
+
+        await itemService.DeleteItem(itemId);
+        
+        return Ok("Item deleted successfully");
+    }
+
     /// <summary>
     /// Move an item to another storage zone.
     /// </summary>
@@ -114,15 +139,15 @@ public class ItemsController(IItemService itemService) : ControllerBase
     }
     
     [HttpPost("{itemId:int}/defect")]
-    public async Task<IActionResult> DefectItem(int itemId, [FromForm] DefectDto defectDto)
+    public async Task<IActionResult> DefectItem(int itemId, [FromForm] DefectReportDto defectReportDto)
     {
-        if (defectDto.DefectImage == null || defectDto.DefectImage.Length == 0)
+        if (defectReportDto.DefectImage == null || defectReportDto.DefectImage.Length == 0)
             return BadRequest("File is empty.");
         
         using var memoryStream = new MemoryStream();
-        await defectDto.DefectImage.CopyToAsync(memoryStream);
+        await defectReportDto.DefectImage.CopyToAsync(memoryStream);
         byte[] fileBytes = memoryStream.ToArray();
         
-        return Ok(new { Size = fileBytes.Length, Name = defectDto.DefectImage.FileName });
+        return Ok(new { Size = fileBytes.Length, Name = defectReportDto.DefectImage.FileName });
     }
 }
