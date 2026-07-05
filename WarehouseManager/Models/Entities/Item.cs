@@ -10,10 +10,13 @@ public enum ItemState
 }
 
 public record Item(
-    string ItemName, 
-    string Description, 
-    ItemState State , 
-    int Id, 
-    int ZoneId, 
+    string ItemName,
+    string Description,
+    ItemState State,
+    int Id,
+    int ZoneId,
     string? ImageName = null
-    );
+)
+{
+    public Zone? Zone { get; set; }
+}

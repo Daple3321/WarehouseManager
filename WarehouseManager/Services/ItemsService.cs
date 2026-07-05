@@ -35,18 +35,18 @@ public class ItemsService : IItemService
         _dbContext = dbContext;
         _logger = logger;
         
-        _logger.LogInformation("LocalApplicationData path: {path}", StorageFolderPath);
+        //_logger.LogDebug("LocalApplicationData path: {path}", StorageFolderPath);
         if (!Directory.Exists(_storagePath))
         {
             Directory.CreateDirectory(_storagePath);
         }
-        _logger.LogInformation("StoragePath: {path}", _storagePath);
-        
     }
     
     public async Task<Item?> GetItemAsync(int itemId)
     {
-        var item = await _dbContext.Items.FirstOrDefaultAsync(i => i.Id == itemId)
+        var item = await _dbContext.Items
+                       .Include(x => x.Zone)
+                       .FirstOrDefaultAsync(i => i.Id == itemId)
                    ?? throw new KeyNotFoundException($"Item {itemId} not found");
 
         return item;
@@ -98,10 +98,6 @@ public class ItemsService : IItemService
         foreach (var item in items)
         {
             var imagePath = await TryUploadItemImage(item.ImageFile);
-            // if (!string.IsNullOrEmpty(imagePath))
-            // {
-            //     
-            // }
 
             newItems.Add(new Item(
                 item.ItemName,
@@ -112,14 +108,6 @@ public class ItemsService : IItemService
                 imagePath)
             );
         }
-        
-        // var newItems = items.Select(dto => new Item(
-        //     dto.ItemName, 
-        //     dto.Description, 
-        //     ItemState.Inspection,
-        //     0, 
-        //     dto.ZoneId))
-        //     .ToList();
         
         _dbContext.Items.AddRange(newItems);
         await _dbContext.SaveChangesAsync();
@@ -154,14 +142,14 @@ public class ItemsService : IItemService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error when uploading item image: {ex}");
+            _logger.LogError(ex, "Error when uploading item image");
             throw;
         }
 
         return trustedFileName;
     }
 
-    private async Task TryDeleteItemImage(string imageName)
+    private void TryDeleteItemImage(string imageName)
     {
         if(string.IsNullOrEmpty(imageName)) return;
         
@@ -171,20 +159,20 @@ public class ItemsService : IItemService
             if (File.Exists(fullPath))
             {
                 File.Delete(fullPath);
-                Console.WriteLine($"Image {imageName} successfully deleted.");
+                _logger.LogInformation("Image {name} successfully deleted.", imageName);
             }
             else
             {
-                Console.WriteLine("File not found.");
+                _logger.LogWarning("File not found.");
             }
         }
         catch (UnauthorizedAccessException)
         {
-            Console.WriteLine("Error: You do not have permission to delete this file or it is read-only.");
+            _logger.LogError("Error: You do not have permission to delete this file or it is read-only.");
         }
         catch (IOException ex)
         {
-            Console.WriteLine($"Error: The file is locked by another process. Details: {ex.Message}");
+            _logger.LogError(ex, "Error: The file is locked by another process. Details: {msg}", ex.Message);
         }
     }
 
@@ -195,9 +183,6 @@ public class ItemsService : IItemService
 
         if (item.ZoneId == zoneId)
             throw new InvalidOperationException($"Cannot move item to zone: {zoneId}. It is already in it.");
-        
-        if (item.State == ItemState.Defected)
-            throw new InvalidOperationException("Cannot move a defected item");
 
         _dbContext.Entry(item).Property(i => i.ZoneId).CurrentValue = zoneId;
         await _dbContext.SaveChangesAsync();
@@ -209,7 +194,7 @@ public class ItemsService : IItemService
         var item = await GetItemAsync(itemId);
         if (item == null) return;
 
-        await TryDeleteItemImage(item.ImageName);
+        TryDeleteItemImage(item.ImageName);
 
         _dbContext.Items.Remove(item);
         await _dbContext.SaveChangesAsync();

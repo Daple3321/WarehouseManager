@@ -25,6 +25,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         npgsqlOptions.EnableRetryOnFailure()));
 
 builder.Services.AddScoped<IItemService, ItemsService>();
+builder.Services.AddScoped<IZoneService, ZoneService>();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 

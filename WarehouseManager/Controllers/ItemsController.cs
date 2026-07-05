@@ -14,9 +14,9 @@ namespace WarehouseManager.Controllers;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("[controller]")]
-public class ItemsController(IItemService itemService) : ControllerBase
+public class ItemsController(IItemService itemService, IZoneService zoneService) : ControllerBase
 {
-    private readonly JsonSerializerOptions _opts = new(){ WriteIndented = true/*, PropertyNamingPolicy = JsonNamingPolicy.CamelCase*/};
+    //private readonly JsonSerializerOptions _opts = new(){ WriteIndented = true/*, PropertyNamingPolicy = JsonNamingPolicy.CamelCase*/};
     
     [HttpGet("{itemId:int}")]
     [EndpointSummary("Retrieves an item by its id")]
@@ -49,7 +49,7 @@ public class ItemsController(IItemService itemService) : ControllerBase
     }
     
     [HttpGet]
-    public async Task<ActionResult<List<Item>>> GetItemsPaginated()
+    public async Task<ActionResult<PagedResult<Item>>> GetItemsPaginated()
     {
         int page = 1;
         int pageSize = 20;
@@ -75,8 +75,38 @@ public class ItemsController(IItemService itemService) : ControllerBase
         }
 
         var items = await itemService.GetItemsPaginatedAsync(page, pageSize);
-        //string itemsJson = JsonSerializer.Serialize(items, _opts);
+ 
+        return Ok(items);
+    }
+    
+    [HttpGet("zone/{zoneId:int}")]
+    public async Task<ActionResult<PagedResult<Item>>> GetItemsInZone(int zoneId)
+    {
+        int page = 1;
+        int pageSize = 20;
+
+        if (HttpContext.Request.Query.TryGetValue("page", out var pageVals))
+        {
+            string firstValue = pageVals.FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(firstValue)) return BadRequest("No page value defined.");
+
+            if (!int.TryParse(firstValue, out int result)) return BadRequest("No page parameter found.");
+            
+            page = result;
+        }
         
+        if (HttpContext.Request.Query.TryGetValue("pageSize", out var sizeVals))
+        {
+            string firstValue = sizeVals.FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(firstValue)) return BadRequest("No pageSize value defined.");
+
+            if (!int.TryParse(firstValue, out int result)) return BadRequest("No pageSize parameter found.");
+            
+            pageSize = result;
+        }
+
+        var items = await zoneService.GetItemsInZone(zoneId, page, pageSize);
+       
         return Ok(items);
     }
     
