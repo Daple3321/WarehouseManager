@@ -137,6 +137,7 @@ public class ItemsController(IItemService itemService, IZoneService zoneService,
     }
     
     [HttpPost]
+    [Consumes("multipart/form-data")]
     public async Task<ActionResult<Item>> AddItem([FromForm] ItemDto item)
     {
         if (string.IsNullOrEmpty(item.ItemName))
@@ -192,6 +193,7 @@ public class ItemsController(IItemService itemService, IZoneService zoneService,
     }
     
     [HttpPost("{itemId:int}/defect")]
+    [Consumes("multipart/form-data")]
     public async Task<ActionResult<DefectReport>> DefectItem(int itemId, [FromForm] DefectReportDto defectReportDto)
     {
         if (defectReportDto.DefectImage == null || defectReportDto.DefectImage.Length == 0)
