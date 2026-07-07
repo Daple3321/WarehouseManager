@@ -1,4 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using WarehouseManager.Data;
 using WarehouseManager.Models;
 using WarehouseManager.Models.DTOs;
@@ -11,6 +13,7 @@ public interface IItemService
     Task<Item?> GetItemAsync(int itemId);
     Task<PagedResult<Item>> GetItemsPaginatedAsync(int page, int pageSize, int categoryId = -1);
     Task<FileStream?> GetImageForItem(int itemId);
+    Task<List<Category>> GetCategories();
     
     Task<Item> AddItemAsync(ItemDto item);
     Task<IEnumerable<Item>> AddItemsAsync(List<ItemDto> items);
@@ -26,16 +29,20 @@ public class ItemsService : IItemService
 {
     private readonly AppDbContext _dbContext;
     private readonly ILogger<ItemsService> _logger;
+    private readonly IDistributedCache _cache;
     
     private static readonly string StorageFolderPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
     private readonly string _storagePath = Path.Combine(StorageFolderPath, "ItemImages");
     private readonly string[] _allowedExtensions = { ".jpg", ".jpeg", ".png"};
     private const long MaxFileSize = 5 * 1024 * 1024; // 5 MB
 
-    public ItemsService(AppDbContext dbContext, ILogger<ItemsService> logger)
+    private readonly JsonSerializerOptions _opts = new(){ WriteIndented = true };
+
+    public ItemsService(AppDbContext dbContext, ILogger<ItemsService> logger, IDistributedCache cache)
     {
         _dbContext = dbContext;
         _logger = logger;
+        _cache = cache;
         
         //_logger.LogDebug("LocalApplicationData path: {path}", StorageFolderPath);
         if (!Directory.Exists(_storagePath))
@@ -68,6 +75,27 @@ public class ItemsService : IItemService
         return fileStream;
     }
 
+    public async Task<List<Category>> GetCategories()
+    {
+        string cacheKey = "category:all";
+        string cachedData = await _cache.GetStringAsync(cacheKey);
+
+        if (!string.IsNullOrEmpty(cachedData))
+            return JsonSerializer.Deserialize<List<Category>>(cachedData, _opts);
+
+        // Cache Miss
+        List<Category> categories = await _dbContext.Categories.ToListAsync();
+        
+        // caching
+        string dataToCache = JsonSerializer.Serialize(categories);
+        var options = new DistributedCacheEntryOptions()
+            .SetAbsoluteExpiration(TimeSpan.FromHours(1))
+            .SetSlidingExpiration(TimeSpan.FromMinutes(20));
+        
+        await _cache.SetStringAsync(cacheKey, dataToCache, options);
+
+        return categories;
+    }
 
     public async Task<PagedResult<Item>> GetItemsPaginatedAsync(int page, int pageSize, int categoryId = -1)
     {
@@ -176,7 +204,8 @@ public class ItemsService : IItemService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error when uploading item image");
-            throw;
+            return null;
+            //throw;
         }
 
         return trustedFileName;

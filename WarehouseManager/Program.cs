@@ -24,6 +24,12 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString, npgsqlOptions => 
         npgsqlOptions.EnableRetryOnFailure()));
 
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = builder.Configuration.GetConnectionString("RedisCache") ?? "localhost:6379";
+    options.InstanceName = "Warehouse_";
+});
+
 builder.Services.AddScoped<IItemService, ItemsService>();
 builder.Services.AddScoped<IZoneService, ZoneService>();
 builder.Services.AddScoped<IDefectService, DefectService>();

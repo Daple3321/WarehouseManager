@@ -15,8 +15,6 @@ namespace WarehouseManager.Controllers;
 [Route("[controller]")]
 public class ItemsController(IItemService itemService, IZoneService zoneService, IDefectService defectService) : ControllerBase
 {
-    //private readonly JsonSerializerOptions _opts = new(){ WriteIndented = true/*, PropertyNamingPolicy = JsonNamingPolicy.CamelCase*/};
-    
     [HttpGet("{itemId:int}")]
     [EndpointSummary("Retrieves an item by its id")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -225,5 +223,14 @@ public class ItemsController(IItemService itemService, IZoneService zoneService,
         
         // BUG: Content type here is not always jpg
         return File(image, "image/jpg");
+    }
+    
+    [HttpGet("categories")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<Category>>> GetCategories()
+    {
+        var categories = await itemService.GetCategories();
+        
+        return Ok(categories);
     }
 }
