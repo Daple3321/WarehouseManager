@@ -16,8 +16,10 @@ public interface IItemService
     Task<IEnumerable<Item>> AddItemsAsync(List<ItemDto> items);
     
     Task<Item> MoveItemAsync(int itemId, int zoneId);
+    Task<Item> ChangeItemState(int itemId, ItemState newState);
     
     Task DeleteItem(int itemId);
+    Task<DeliveriesAnalytics> GetAnalytics(int days);
 }
 
 public class ItemsService : IItemService
@@ -105,12 +107,12 @@ public class ItemsService : IItemService
     
     public async Task<Item> AddItemAsync(ItemDto item)
     {
-        var category = await _dbContext.Categories.FirstOrDefaultAsync(x => x.Id == item.CategoryId)
+        var category = await _dbContext.Categories.AsNoTracking().FirstOrDefaultAsync(x => x.Id == item.CategoryId)
                        ?? throw new KeyNotFoundException($"Category {item.CategoryId} not found");
         
         var imageName = await TryUploadItemImage(item.ImageFile); 
         
-        var newItem = new Item(item.ItemName, item.Description, ItemState.Received, 0, item.ZoneId, item.CategoryId, imageName);
+        var newItem = new Item(item.ItemName, item.Description, ItemState.Received, 0, item.ZoneId, item.CategoryId, DateTime.UtcNow, imageName);
         _dbContext.Items.Add(newItem);
         await _dbContext.SaveChangesAsync();
 
@@ -123,7 +125,7 @@ public class ItemsService : IItemService
         
         foreach (var item in items)
         {
-            var category = await _dbContext.Categories.FirstOrDefaultAsync(x => x.Id == item.CategoryId)
+            var category = await _dbContext.Categories.AsNoTracking().FirstOrDefaultAsync(x => x.Id == item.CategoryId)
                            ?? throw new KeyNotFoundException($"Category {item.CategoryId} not found");
             
             var imagePath = await TryUploadItemImage(item.ImageFile);
@@ -135,6 +137,7 @@ public class ItemsService : IItemService
                 0, 
                 item.ZoneId,
                 item.CategoryId,
+                DateTime.UtcNow,
                 imagePath)
             );
         }
@@ -210,13 +213,30 @@ public class ItemsService : IItemService
     {
         var item = await _dbContext.Items.FirstOrDefaultAsync(i => i.Id == itemId)
             ?? throw new KeyNotFoundException($"Item {itemId} not found");
+        
+        var zone = await _dbContext.Zones.AsNoTracking().FirstOrDefaultAsync(i => i.Id == zoneId)
+                   ?? throw new KeyNotFoundException($"Zone {itemId} not found");
+        
 
         if (item.ZoneId == zoneId)
             throw new InvalidOperationException($"Cannot move item to zone: {zoneId}. It is already in it.");
 
         _dbContext.Entry(item).Property(i => i.ZoneId).CurrentValue = zoneId;
         await _dbContext.SaveChangesAsync();
-        return item with { ZoneId = zoneId };
+        return item;
+    }
+    
+    public async Task<Item> ChangeItemState(int itemId, ItemState newState)
+    {
+        var item = await _dbContext.Items.FirstOrDefaultAsync(i => i.Id == itemId)
+                   ?? throw new KeyNotFoundException($"Item {itemId} not found");
+        
+        if(newState == ItemState.Defected)
+            throw new InvalidOperationException($"Can't change state to defected. Use specialized /items/{itemId}/defect endpoint.");
+        
+        _dbContext.Entry(item).Property(i => i.State).CurrentValue = newState;
+        await _dbContext.SaveChangesAsync();
+        return item;
     }
 
     public async Task DeleteItem(int itemId)
@@ -228,5 +248,28 @@ public class ItemsService : IItemService
 
         _dbContext.Items.Remove(item);
         await _dbContext.SaveChangesAsync();
+    }
+
+    public async Task<DeliveriesAnalytics> GetAnalytics(int days)
+    {
+        DateTime start = DateTime.UtcNow.AddDays(-days);
+        DateTime end = DateTime.UtcNow;
+
+        var items = await _dbContext.Items
+            .AsNoTracking()
+            .Where(x => x.ReceivedDate >= start && x.ReceivedDate <= end)
+            .ToListAsync();
+        
+        var mostFrequentCategory = items
+            .GroupBy(i => i.CategoryId)
+            .Select(g => new 
+            { 
+                CategoryId = g.Key, 
+                Count = g.Count() 
+            })
+            .OrderByDescending(g => g.Count)
+            .FirstOrDefault();
+        
+        return new DeliveriesAnalytics(items.Count, mostFrequentCategory.CategoryId);
     }
 }

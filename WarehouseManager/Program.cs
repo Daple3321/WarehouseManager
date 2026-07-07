@@ -26,6 +26,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<IItemService, ItemsService>();
 builder.Services.AddScoped<IZoneService, ZoneService>();
+builder.Services.AddScoped<IDefectService, DefectService>();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 

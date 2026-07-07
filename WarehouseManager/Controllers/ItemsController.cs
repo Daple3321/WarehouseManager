@@ -10,11 +10,10 @@ namespace WarehouseManager.Controllers;
 // TODO: Things to clear-up:
 // 1) Why is there two places for error handling?? IN service (throws) and in this controller. Which one actually returns?
 // 2) Error handling is bad. In image uploads and other places the stack traces leak.
-// 3)
 [ApiController]
 [ApiVersion("1.0")]
 [Route("[controller]")]
-public class ItemsController(IItemService itemService, IZoneService zoneService) : ControllerBase
+public class ItemsController(IItemService itemService, IZoneService zoneService, IDefectService defectService) : ControllerBase
 {
     //private readonly JsonSerializerOptions _opts = new(){ WriteIndented = true/*, PropertyNamingPolicy = JsonNamingPolicy.CamelCase*/};
     
@@ -175,20 +174,56 @@ public class ItemsController(IItemService itemService, IZoneService zoneService)
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<Item>> MoveItem([FromBody] MoveDto moveDto)
     {
+        var itemsInZone = await zoneService.GetItemCountInZone(moveDto.ZoneId);
+        if (itemsInZone.count >= itemsInZone.zone.MaxItems)
+            return Conflict($"Can't move item: {moveDto.ItemId} to zone: {moveDto.ZoneId}. It is already full.");
+        
         var item = await itemService.MoveItemAsync(moveDto.ItemId, moveDto.ZoneId);
         return Ok(item);
     }
     
+    [HttpPut("{itemId:int}/state/{state}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<Item>> ChangeItemState(int itemId, ItemState state)
+    {
+        var item = await itemService.ChangeItemState(itemId, state);
+        
+        return Ok(item);
+    }
+    
     [HttpPost("{itemId:int}/defect")]
-    public async Task<IActionResult> DefectItem(int itemId, [FromForm] DefectReportDto defectReportDto)
+    public async Task<ActionResult<DefectReport>> DefectItem(int itemId, [FromForm] DefectReportDto defectReportDto)
     {
         if (defectReportDto.DefectImage == null || defectReportDto.DefectImage.Length == 0)
             return BadRequest("File is empty.");
+
+        var report = await defectService.CreateReport(defectReportDto);
         
-        using var memoryStream = new MemoryStream();
-        await defectReportDto.DefectImage.CopyToAsync(memoryStream);
-        byte[] fileBytes = memoryStream.ToArray();
+        return Created($"{itemId}/defect", report);
+    }
+
+    [HttpGet("{reportId:int}/defect")]
+    public async Task<ActionResult<DefectReport>> GetDefectReport(int reportId)
+    {
+        var report = await defectService.GetReport(reportId);
+
+        return report;
+    }
+    
+    [HttpGet("{reportId:int}/defect/image")]
+    [EndpointSummary("Retrieves report image by reportId")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<Item>> GetImageForReport(int reportId)
+    {
+        if (reportId < 0) return BadRequest("Id can't be negative");
         
-        return Ok(new { Size = fileBytes.Length, Name = defectReportDto.DefectImage.FileName });
+        var image = await defectService.GetImageForReport(reportId);
+        if (image == null) return NotFound($"Image for report {reportId} was not found.");
+        
+        // BUG: Content type here is not always jpg
+        return File(image, "image/jpg");
     }
 }

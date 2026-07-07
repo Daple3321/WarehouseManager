@@ -12,7 +12,7 @@ public interface IZoneService
     Task AddZone(Zone newZone);
     
     Task<PagedResult<Item>> GetItemsInZone(int zoneId, int page, int pageSize);
-    Task<int> GetItemCountInZone(int zoneId);
+    Task<(int count, Zone zone)> GetItemCountInZone(int zoneId);
 }
 
 public class ZoneService(ILogger<ZoneService> logger, AppDbContext context) : IZoneService
@@ -60,8 +60,13 @@ public class ZoneService(ILogger<ZoneService> logger, AppDbContext context) : IZ
         return new PagedResult<Item>(items, totalItems, page, pageSize);
     }
 
-    public async Task<int> GetItemCountInZone(int zoneId)
+    public async Task<(int count, Zone zone)> GetItemCountInZone(int zoneId)
     {
-        return await context.Items.CountAsync(x => x.ZoneId == zoneId);
+        var zone = await context.Zones.FirstOrDefaultAsync(x => x.Id == zoneId)
+                   ?? throw new KeyNotFoundException($"Zone {zoneId} not found");
+        
+        var count = await context.Items.CountAsync(x => x.ZoneId == zoneId);
+        
+        return (count, zone);
     }
 }

@@ -16,6 +16,7 @@ public record Item(
     int Id,
     int ZoneId,
     int CategoryId,
+    DateTime ReceivedDate,
     string? ImageName = null
 )
 {
