@@ -15,8 +15,10 @@ public record Item(
     ItemState State,
     int Id,
     int ZoneId,
+    int CategoryId,
     string? ImageName = null
 )
 {
     public Zone? Zone { get; set; }
+    public Category? Category { get; set; }
 }

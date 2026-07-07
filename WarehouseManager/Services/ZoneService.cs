@@ -54,6 +54,7 @@ public class ZoneService(ILogger<ZoneService> logger, AppDbContext context) : IZ
             .Take(pageSize)
             .Where(x => x.ZoneId == zoneId)
             .Include(x => x.Zone)
+            .Include(x => x.Category)
             .ToListAsync();
 
         return new PagedResult<Item>(items, totalItems, page, pageSize);

@@ -3,6 +3,7 @@
 public record ItemDto(
     string ItemName, 
     string? Description, 
-    int ZoneId, 
+    int ZoneId,
+    int CategoryId,
     IFormFile? ImageFile = null
 );

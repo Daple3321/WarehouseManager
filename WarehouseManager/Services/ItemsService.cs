@@ -9,7 +9,7 @@ namespace WarehouseManager.Services;
 public interface IItemService
 {
     Task<Item?> GetItemAsync(int itemId);
-    Task<PagedResult<Item>> GetItemsPaginatedAsync(int page, int pageSize);
+    Task<PagedResult<Item>> GetItemsPaginatedAsync(int page, int pageSize, int categoryId = -1);
     Task<FileStream?> GetImageForItem(int itemId);
     
     Task<Item> AddItemAsync(ItemDto item);
@@ -46,6 +46,7 @@ public class ItemsService : IItemService
     {
         var item = await _dbContext.Items
                        .Include(x => x.Zone)
+                       .Include(x => x.Category)
                        .FirstOrDefaultAsync(i => i.Id == itemId)
                    ?? throw new KeyNotFoundException($"Item {itemId} not found");
 
@@ -66,25 +67,50 @@ public class ItemsService : IItemService
     }
 
 
-    public async Task<PagedResult<Item>> GetItemsPaginatedAsync(int page, int pageSize)
+    public async Task<PagedResult<Item>> GetItemsPaginatedAsync(int page, int pageSize, int categoryId = -1)
     {
         int itemsToSkip = (page - 1) * pageSize;
         int totalItems = await _dbContext.Items.CountAsync();
+
+        List<Item> items;
+        if (categoryId > 0)
+        {
+            var category = await _dbContext.Categories.FirstOrDefaultAsync(x => x.Id == categoryId)
+                           ?? throw new KeyNotFoundException($"Category {categoryId} not found");
+            
+            items = await _dbContext.Items
+                .Where(x => x.CategoryId == categoryId)
+                .Skip(itemsToSkip)
+                .Take(pageSize)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+        else
+        {
+            items = await _dbContext.Items
+                .Skip(itemsToSkip)
+                .Take(pageSize)
+                .AsNoTracking()
+                .ToListAsync();
+        }
         
-        var items = await _dbContext.Items
-            .Skip(itemsToSkip)
-            .Take(pageSize)
-            .AsNoTracking()
-            .ToListAsync();
+        // var items = await _dbContext.Items
+        //     .Skip(itemsToSkip)
+        //     .Take(pageSize)
+        //     .AsNoTracking()
+        //     .ToListAsync();
 
         return new PagedResult<Item>(items, totalItems, page, pageSize);
     }
     
     public async Task<Item> AddItemAsync(ItemDto item)
     {
+        var category = await _dbContext.Categories.FirstOrDefaultAsync(x => x.Id == item.CategoryId)
+                       ?? throw new KeyNotFoundException($"Category {item.CategoryId} not found");
+        
         var imageName = await TryUploadItemImage(item.ImageFile); 
         
-        var newItem = new Item(item.ItemName, item.Description, ItemState.Received, 0, item.ZoneId, imageName);
+        var newItem = new Item(item.ItemName, item.Description, ItemState.Received, 0, item.ZoneId, item.CategoryId, imageName);
         _dbContext.Items.Add(newItem);
         await _dbContext.SaveChangesAsync();
 
@@ -97,14 +123,18 @@ public class ItemsService : IItemService
         
         foreach (var item in items)
         {
+            var category = await _dbContext.Categories.FirstOrDefaultAsync(x => x.Id == item.CategoryId)
+                           ?? throw new KeyNotFoundException($"Category {item.CategoryId} not found");
+            
             var imagePath = await TryUploadItemImage(item.ImageFile);
-
+            
             newItems.Add(new Item(
                 item.ItemName,
                 item.Description, 
                 ItemState.Received, 
                 0, 
-                item.ZoneId, 
+                item.ZoneId,
+                item.CategoryId,
                 imagePath)
             );
         }

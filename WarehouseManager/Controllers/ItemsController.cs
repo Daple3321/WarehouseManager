@@ -53,6 +53,7 @@ public class ItemsController(IItemService itemService, IZoneService zoneService)
     {
         int page = 1;
         int pageSize = 20;
+        int categoryId = -1;
 
         if (HttpContext.Request.Query.TryGetValue("page", out var pageVals))
         {
@@ -73,8 +74,18 @@ public class ItemsController(IItemService itemService, IZoneService zoneService)
             
             pageSize = result;
         }
+        
+        if (HttpContext.Request.Query.TryGetValue("categoryId", out var categoryVals))
+        {
+            string firstValue = categoryVals.FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(firstValue)) return BadRequest("No categoryId value defined.");
 
-        var items = await itemService.GetItemsPaginatedAsync(page, pageSize);
+            if (!int.TryParse(firstValue, out int result)) return BadRequest("No categoryId parameter found.");
+            
+            categoryId = result;
+        }
+
+        var items = await itemService.GetItemsPaginatedAsync(page, pageSize, categoryId);
  
         return Ok(items);
     }
