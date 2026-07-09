@@ -20,7 +20,8 @@ public class DefectReportConsumer : BackgroundService
         {
             BootstrapServers = _configuration["Kafka:BootstrapServers"],
             GroupId = "defect-report-consumer-group",
-            AutoOffsetReset = AutoOffsetReset.Earliest
+            AutoOffsetReset = AutoOffsetReset.Earliest,
+            AllowAutoCreateTopics = true
         };
 
         while (!stoppingToken.IsCancellationRequested)
