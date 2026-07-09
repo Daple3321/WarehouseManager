@@ -1,4 +1,6 @@
 ﻿# WarehouseManager
+ 
+ [![.NET](https://github.com/Daple3321/WarehouseManager/actions/workflows/dotnet.yml/badge.svg)](https://github.com/Daple3321/WarehouseManager/actions/workflows/dotnet.yml)
 
 REST API для управления складскими запасами, построенный на ASP.NET Core (.NET 10). Предназначен для отслеживания физических товаров через многозонный складской процесс - от приёмки до проверки, оформления дефектов и перевода в статус готовности к продаже.
 
