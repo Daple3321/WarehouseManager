@@ -1,4 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Text.Json;
+using Confluent.Kafka;
+using Microsoft.EntityFrameworkCore;
 using WarehouseManager.Data;
 using WarehouseManager.Models.DTOs;
 using WarehouseManager.Models.Entities;
@@ -17,23 +19,43 @@ public class DefectService : IDefectService
 {
     private readonly AppDbContext _context;
     private readonly ILogger<DefectService> _logger;
+    private readonly IProducer<string, string> _producer;
     
     private static readonly string StorageFolderPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
     private readonly string _imagesPath = Path.Combine(StorageFolderPath, "DefectImages");
     private readonly string _reportsPath = Path.Combine(StorageFolderPath, "DefectReports");
     private readonly string[] _allowedExtensions = { ".jpg", ".jpeg", ".png"};
     private const long MaxFileSize = 5 * 1024 * 1024; // 5 MB
+
+    private const string _kafkaTopic = "defectsTopic";
     
-    public DefectService(AppDbContext dbContext, ILogger<DefectService> logger)
+    public DefectService(AppDbContext dbContext, ILogger<DefectService> logger, IProducer<string, string> producer)
     {
         _context = dbContext;
         _logger = logger;
+        _producer = producer;
         
         if (!Directory.Exists(_imagesPath))
             Directory.CreateDirectory(_imagesPath);
         
         if (!Directory.Exists(_reportsPath))
             Directory.CreateDirectory(_reportsPath);
+    }
+    
+    private async Task<bool> PublishEventAsync(string key, string value)
+    {
+        try
+        {
+            var message = new Message<string, string> { Key = key, Value = value };
+            var deliveryResult = await _producer.ProduceAsync(_kafkaTopic, message);
+            
+            return deliveryResult.Status == PersistenceStatus.Persisted;
+        }
+        catch (ProduceException<string, string> ex)
+        {
+            _logger.LogError(ex, "Kafka delivery failure: {reason}", ex.Error.Reason);
+            return false;
+        }
     }
 
     public async Task<DefectReport> CreateReport(DefectReportDto reportDto)
@@ -43,6 +65,8 @@ public class DefectService : IDefectService
         
         var item = await _context.Items.FirstOrDefaultAsync(i => i.Id == reportDto.ItemId)
                    ?? throw new KeyNotFoundException($"Item {reportDto.ItemId} not found");
+        
+        if(item.State == ItemState.Defected) throw new KeyNotFoundException($"Item {reportDto.ItemId} is already defected");
 
         var imagePath = await TryUploadImage(reportDto.DefectImage);
 
@@ -51,6 +75,8 @@ public class DefectService : IDefectService
         _context.Reports.Add(report);
         await _context.SaveChangesAsync();
 
+        var published = await PublishEventAsync(report.Id.ToString(), JsonSerializer.Serialize(report));
+        
         return report;
     }
 

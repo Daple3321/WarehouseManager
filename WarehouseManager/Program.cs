@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using Confluent.Kafka;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,11 @@ builder.Services.AddApiVersioning(options =>
     options.DefaultApiVersion = new ApiVersion(1, 0);
     options.AssumeDefaultVersionWhenUnspecified = true;
     options.ReportApiVersions = true;
+
+    options.ApiVersionReader = ApiVersionReader.Combine(
+        new QueryStringApiVersionReader("api-version"),
+        new HeaderApiVersionReader("X-Api-Version")
+    );
 }).AddMvc();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
@@ -31,9 +37,20 @@ builder.Services.AddStackExchangeRedisCache(options =>
     options.InstanceName = "Warehouse_";
 });
 
+builder.Services.AddSingleton<IProducer<string, string>>(sp =>
+{
+    var config = new ProducerConfig
+    {
+        BootstrapServers = builder.Configuration["Kafka:BootstrapServers"],
+        Acks = Acks.All
+    };
+    return new ProducerBuilder<string, string>(config).Build();
+});
+
 builder.Services.AddScoped<IItemService, ItemsService>();
 builder.Services.AddScoped<IZoneService, ZoneService>();
 builder.Services.AddScoped<IDefectService, DefectService>();
+builder.Services.AddHostedService<DefectReportConsumer>();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
