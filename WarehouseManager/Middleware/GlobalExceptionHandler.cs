@@ -24,9 +24,7 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger, IHos
         {
             Status = statusCode,
             Title = title,
-            Detail = statusCode == StatusCodes.Status500InternalServerError && !env.IsDevelopment()
-                ? null
-                : exception.Message,
+            Detail = env.IsDevelopment() ? exception.Message : null,
             Type = $"https://httpstatuses.com/{statusCode}"
         }, cancellationToken);
 

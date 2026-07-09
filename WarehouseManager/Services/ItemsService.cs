@@ -204,8 +204,7 @@ public class ItemsService : IItemService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error when uploading item image");
-            return null;
-            //throw;
+            throw;
         }
 
         return trustedFileName;
