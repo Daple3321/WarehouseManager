@@ -7,9 +7,6 @@ using WarehouseManager.Services;
 
 namespace WarehouseManager.Controllers;
 
-// TODO: Things to clear-up:
-// 1) Why is there two places for error handling?? IN service (throws) and in this controller. Which one actually returns?
-// 2) Error handling is bad. In image uploads and other places the stack traces leak.
 [ApiController]
 [ApiVersion("1.0")]
 [Route("[controller]")]
